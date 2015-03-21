@@ -1,0 +1,130 @@
+<?php
+
+/**
+ * @file
+ * This module solves the problem where
+ * the book outline is inconsistent with the
+ * the actual pages it contains. This module
+ * bulk updates all book outlines.
+ * 
+ * Sometimes book pages can be added or removed but 
+ * the Book outline does not update automatically.
+ * In the case of a site with many Books this can
+ * be problematic.  
+ */
+
+
+/**
+ * Implements hook_menu().
+ */
+function book_updater_menu() {
+  $items = array();
+  $items['admin/content/book-updater'] = array(
+    'title' => 'Book Updater',
+    'description' => 'Update the book outline for all book nodes',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('book_updater_form'),
+    'access arguments' => array('access book updater'),
+  );
+
+  return $items;
+}
+
+/**
+ * Implements hook_permission().
+ */
+function book_updater_permission() {
+  return array(
+    'access book updater' => array(
+      'title' => t('Access and Perform Book Updater'),
+    ),
+  );
+}
+
+/**
+ * Build book_updater_form().
+ */
+function book_updater_form($form, &$form_state) {
+  $form = array();
+
+  $form['markup'] = array(
+    '#type' => 'markup',
+    '#markup' => t('The button below will update the book outine for all book nodes of the selected content type.'),
+  );
+
+  $form['selected_book_type'] = array(
+      '#type' => 'select',
+      '#title' => t('Book Content Type'),
+      '#options' => _book_updater_book_types(),
+      '#description' => t('Please select the content type you wish to update.'),
+  );
+
+  $form['actions'] = array(
+    '#type' => 'actions',
+  );
+
+  $form['actions']['submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('Rebuild Book Outlines'),
+  );
+
+  return $form;
+}
+
+/**
+ * validate function for book_update_form.
+ */
+function book_updater_form_validate($form, &$form_state) {
+  // Make sure the user has selected a node type
+  if ($form_state['input']['selected_book_type'] == 'none') {
+  	form_set_error('selected_book_type', t('Please select a book type.'));
+  }
+}
+
+/**
+ * Submit function for book_update_form.
+ */
+function book_updater_form_submit($form, &$form_state) {
+  $type_to_check = $form_state['input']['selected_book_type'];
+  $query = new EntityFieldQuery();
+
+  $result = $query->entityCondition('entity_type', 'node')
+                  ->entityCondition('bundle', $type_to_check)
+                  ->execute();
+
+  $count = 0;
+  $total = 0;
+  if (isset($result['node']) && !empty($result['node'])) {
+    $total = count($result['node']);
+    $nodes = node_load_multiple(array_keys($result['node']));
+  
+    foreach ($nodes as $node) {
+      _book_update_outline($node);
+      $count++;
+    }
+  }
+
+  drupal_set_message(t('!count of !total book outlines have now been updated.', 
+                 array('!count' => $count, '!total' => $total)));
+}
+
+/**
+ * Prepares valid book types to use as a select list.
+ */
+function _book_updater_book_types() {
+	$select_values = array('none' => 'None');
+	
+	// node_type_get_types() is a funciton of book.module
+	// which returns an array of known book types
+	$types = node_type_get_types();
+	
+  foreach($types as $ct) {
+		// if the content type is an allowed book type, then add
+    // its machine name to the array
+    if (book_type_is_allowed($ct->type)) {
+		  $select_values[$ct->type] = $ct->name;	
+		}
+	}
+
+	return $select_values;
+}

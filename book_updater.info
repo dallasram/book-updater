@@ -1,0 +1,4 @@
+name = Book Outline Updater
+descripton = Updated the book outline for all books.
+core = 7.x
+dependencies[] = book
